@@ -1,0 +1,12 @@
+{
+  "devDependencies": {
+    "@0x/contracts-erc20": "^3.3.47",
+    "@0x/contracts-exchange-libs": "^4.3.37",
+    "@nomicfoundation/hardhat-toolbox": "^2.0.0",
+    "@openzeppelin/contracts": "^4.7.3",
+    "hardhat": "^2.12.0"
+  },
+  "dependencies": {
+    "@uniswap/v2-core": "^1.0.1"
+  }
+}
