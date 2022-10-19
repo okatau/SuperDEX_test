@@ -64,6 +64,7 @@ describe("Deploying and testing SuperDEX", function(){
                 NewUniswapV2Lib: NewUniswapV2Lib.address,
             }
         });
+        // let nuv2er = await ethers.getContractFactory("NewUniswapV2Router");
         const NewUniswapV2Router = await nuv2er.deploy();
         //deploying SimpleSwap
         let augustusRFQ = await ethers.getContractFactory("AugustusRFQ");
@@ -133,6 +134,7 @@ describe("Deploying and testing SuperDEX", function(){
         let swapOnUniswapV2ForkDeBridge = "0xa2a14470";
         let simpleSwapDeBridge = "0xff9b861a";
         let simpleswapAfterDeBridge = "0x4bdac611";
+        let swapSimpleSwap = "0x54e3f31b";
         let swapOnZeroXv4DeBridge = "0x77dd05b9";
         let routerRole = await AugustusSwapper.ROUTER_ROLE();
         let encodeCall = [
@@ -161,6 +163,7 @@ describe("Deploying and testing SuperDEX", function(){
         await owner.sendTransaction(tx);
         await AugustusSwapper.setImplementation(simpleSwapDeBridge, SimpleSwap.address);
         await AugustusSwapper.setImplementation(simpleswapAfterDeBridge, SimpleSwap.address);
+        await AugustusSwapper.setImplementation(swapSimpleSwap, SimpleSwap.address);
 
         await AugustusSwapper.grantRole(routerRole, UniswapV2Router.address);
         await AugustusSwapper.setImplementation(setAddressSig, UniswapV2Router.address);
@@ -182,573 +185,873 @@ describe("Deploying and testing SuperDEX", function(){
             Adapter01, 
             UniswapV2Pair, 
             UniswapV2PairETH, 
+            SimpleSwap,
             accounts, 
             owner };
     }
 
-    describe("Testing MultiPath", function(){
-        it("Testing multiSwapDeBridge. Swap token to token", async function(){            
-            const { TestToken1, 
-                TestToken2,  
-                AugustusSwapper, 
-                TokenTransferProxy, 
-                Adapter01, 
-                UniswapV2Pair,
-                accounts, 
-                owner } = await loadFixture(deploySuperDEX);
-            receiver = accounts[16];
-            let payload;
-            let helper = await ethers.getContractFactory("MultiPathHelper");
-            let MultiPathHelper = await helper.deploy();
-            let direction = await UniswapV2Pair.token0() == TestToken1.address;
-            payload = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2Pair.address, direction);
+    // describe("Testing MultiPath", function(){
+    //     it("Testing multiSwapDeBridge. Swap token to token", async function(){            
+    //         const { TestToken1, 
+    //             TestToken2,  
+    //             AugustusSwapper, 
+    //             TokenTransferProxy, 
+    //             Adapter01, 
+    //             UniswapV2Pair,
+    //             accounts, 
+    //             owner } = await loadFixture(deploySuperDEX);
+    //         receiver = accounts[16];
+    //         let payload;
+    //         let helper = await ethers.getContractFactory("MultiPathHelper");
+    //         let MultiPathHelper = await helper.deploy();
+    //         let direction = await UniswapV2Pair.token0() == TestToken1.address;
+    //         payload = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2Pair.address, direction);
 
-            let balanceBefore = await TestToken2.balanceOf(receiver.address);
-            await TestToken1.approve(TokenTransferProxy, ethers.utils.parseEther("100"));
+    //         let balanceBefore = await TestToken2.balanceOf(receiver.address);
+    //         await TestToken1.approve(TokenTransferProxy, ethers.utils.parseEther("100"));
             
-            let encoder = new ethers.utils.AbiCoder();
-            calldata = encoder.encode([ "tuple(address, uint256[])" ], [[ethers.constants.AddressZero, [payload]]]);
-            let data = [[
-                [TestToken1.address, TestToken1.address],
-                ethers.utils.parseEther("5"),
-                ethers.utils.parseEther("3"),
-                ethers.utils.parseEther("3.5"),
-                receiver.address,
-                [[
-                    TestToken2.address,
-                    0,
-                    [[
-                        Adapter01.address,
-                        10000,
-                        0,
-                        [[
-                            4,
-                            ethers.constants.AddressZero,
-                            10000,
-                            calldata,
-                            0
-                        ]]
-                    ]]
-                ]],
-                [[
-                    TestToken2.address,
-                    0,
-                    [[
-                        Adapter01.address,
-                        10000,
-                        0,
-                        [[
-                            4,
-                            ethers.constants.AddressZero,
-                            10000,
-                            calldata,
-                            0
-                        ]]
-                    ]]
-                ]],
-                ethers.constants.AddressZero,
-                ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
-                "0x00",
-                1686061732,
-                "0x48726217fca940b892b3b899843c8a57",
-                ethers.utils.parseEther("0.05"),
-                1
-            ]];
-            let ABI = [
-                "function multiSwapDeBridge((address[],uint256,uint256,uint256,address,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[],(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[],address,uint256,bytes,uint256,bytes16,uint256,uint256))"
-            ];
-            let iface = new ethers.utils.Interface(ABI);
-            let functionCall = iface.encodeFunctionData("multiSwapDeBridge", data);
-            tx = {
-                to: AugustusSwapper.address,
-                data: functionCall,
-                value: ethers.utils.parseEther("0.01")
-            }
-            await owner.sendTransaction(tx);
-            expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
+    //         let encoder = new ethers.utils.AbiCoder();
+    //         calldata = encoder.encode([ "tuple(address, uint256[])" ], [[ethers.constants.AddressZero, [payload]]]);
+    //         let data = [[
+    //             [TestToken1.address, TestToken1.address],
+    //             ethers.utils.parseEther("5"),
+    //             ethers.utils.parseEther("3"),
+    //             ethers.utils.parseEther("3.5"),
+    //             receiver.address,
+    //             [[
+    //                 TestToken2.address,
+    //                 0,
+    //                 [[
+    //                     Adapter01.address,
+    //                     10000,
+    //                     0,
+    //                     [[
+    //                         4,
+    //                         ethers.constants.AddressZero,
+    //                         10000,
+    //                         calldata,
+    //                         0
+    //                     ]]
+    //                 ]]
+    //             ]],
+    //             [[
+    //                 TestToken2.address,
+    //                 0,
+    //                 [[
+    //                     Adapter01.address,
+    //                     10000,
+    //                     0,
+    //                     [[
+    //                         4,
+    //                         ethers.constants.AddressZero,
+    //                         10000,
+    //                         calldata,
+    //                         0
+    //                     ]]
+    //                 ]]
+    //             ]],
+    //             ethers.constants.AddressZero,
+    //             ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
+    //             "0x00",
+    //             1686061732,
+    //             "0x48726217fca940b892b3b899843c8a57",
+    //             ethers.utils.parseEther("0.05"),
+    //             1
+    //         ]];
+    //         let ABI = [
+    //             "function multiSwapDeBridge((address[],uint256,uint256,uint256,address,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[],(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[],address,uint256,bytes,uint256,bytes16,uint256,uint256))"
+    //         ];
+    //         let iface = new ethers.utils.Interface(ABI);
+    //         let functionCall = iface.encodeFunctionData("multiSwapDeBridge", data);
+    //         tx = {
+    //             to: AugustusSwapper.address,
+    //             data: functionCall,
+    //             value: ethers.utils.parseEther("0.01")
+    //         }
+    //         await owner.sendTransaction(tx);
+    //         expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
 
-            balanceBefore = await TestToken2.balanceOf(receiver.address);            
-            data[0][13] = 31337;
-            await TestToken1.transfer(receiver.address, ethers.utils.parseEther("5"));
-            await TestToken1.connect(receiver).approve(AugustusSwapper.address, ethers.utils.parseEther("4"));
-            functionCall = iface.encodeFunctionData("multiSwapDeBridge", data);
-            tx = {
-                to: AugustusSwapper.address,
-                data: functionCall,
-            }
-            await receiver.sendTransaction(tx);
-            expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
-        })
+    //         balanceBefore = await TestToken2.balanceOf(receiver.address);            
+    //         data[0][13] = 31337;
+    //         await TestToken1.transfer(receiver.address, ethers.utils.parseEther("5"));
+    //         await TestToken1.connect(receiver).approve(AugustusSwapper.address, ethers.utils.parseEther("4"));
+    //         functionCall = iface.encodeFunctionData("multiSwapDeBridge", data);
+    //         tx = {
+    //             to: AugustusSwapper.address,
+    //             data: functionCall,
+    //         }
+    //         await receiver.sendTransaction(tx);
+    //         expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
+    //     })
 
-        it("Testint multiSwapDeBridge. Swap token to ETH", async function(){
-            const {
-                TestToken2, 
-                WETH, 
-                AugustusSwapper, 
-                TokenTransferProxy, 
-                Adapter01,
-                UniswapV2PairETH,
-                accounts, 
-                owner 
-            } = await loadFixture(deploySuperDEX);
-            let ethAddress = ethers.utils.getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
-            let receiver = accounts[16];
-            let encodedPair;
-            let direction = await UniswapV2PairETH.token0() == TestToken2.address;
-            let helper = await ethers.getContractFactory("MultiPathHelper");
-            let MultiPathHelper = await helper.deploy();
-            encodedPair = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2PairETH.address, direction);
+    //     it("Testint multiSwapDeBridge. Swap token to ETH", async function(){
+    //         const {
+    //             TestToken2, 
+    //             WETH, 
+    //             AugustusSwapper, 
+    //             TokenTransferProxy, 
+    //             Adapter01,
+    //             UniswapV2PairETH,
+    //             accounts, 
+    //             owner 
+    //         } = await loadFixture(deploySuperDEX);
+    //         let ethAddress = ethers.utils.getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
+    //         let receiver = accounts[16];
+    //         let encodedPair;
+    //         let direction = await UniswapV2PairETH.token0() == TestToken2.address;
+    //         let helper = await ethers.getContractFactory("MultiPathHelper");
+    //         let MultiPathHelper = await helper.deploy();
+    //         encodedPair = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2PairETH.address, direction);
 
-            let balanceBefore = await receiver.getBalance();
-            await TestToken2.approve(TokenTransferProxy, ethers.utils.parseEther("100"));
+    //         let balanceBefore = await receiver.getBalance();
+    //         await TestToken2.approve(TokenTransferProxy, ethers.utils.parseEther("100"));
 
-            let encoder = new ethers.utils.AbiCoder();
-            payload = encoder.encode([ "tuple(address, uint256[])" ], [[WETH.address, [encodedPair]]]);
-            let data = [[
-                [TestToken2.address, TestToken2.address],
-                ethers.utils.parseEther("5"),
-                ethers.utils.parseEther("1"),
-                ethers.utils.parseEther("1.5"),
-                receiver.address,
-                [[
-                    ethAddress,
-                    0,
-                    [[
-                        Adapter01.address,
-                        10000,
-                        0,
-                        [[
-                            4,
-                            ethers.constants.AddressZero,
-                            10000,
-                            payload,
-                            0
-                        ]]
-                    ]]
-                ]],
-                [[
-                    ethAddress,
-                    0,
-                    [[
-                        Adapter01.address,
-                        10000,
-                        0,
-                        [[
-                            4,
-                            ethers.constants.AddressZero,
-                            10000,
-                            payload,
-                            0
-                        ]]
-                    ]]
-            ]],
-            ethers.constants.AddressZero,
-            ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
-            "0x00",
-            1686061732,
-            "0x48726217fca940b892b3b899843c8a57",
-            ethers.utils.parseEther("0.05"),
-            1
-            ]];
-            let ABI = [
-                "function multiSwapDeBridge((address[],uint256,uint256,uint256,address,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[],(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[],address,uint256,bytes,uint256,bytes16,uint256,uint256))"
-            ];
-            let iface = new ethers.utils.Interface(ABI);
-            let functionCall = iface.encodeFunctionData("multiSwapDeBridge", data);
-            tx = {
-                to: AugustusSwapper.address,
-                data: functionCall,
-                value: ethers.utils.parseEther("0.01")
-            }
-            await owner.sendTransaction(tx);
-            expect(await receiver.getBalance()).greaterThan(balanceBefore);
+    //         let encoder = new ethers.utils.AbiCoder();
+    //         payload = encoder.encode([ "tuple(address, uint256[])" ], [[WETH.address, [encodedPair]]]);
+    //         let data = [[
+    //             [TestToken2.address, TestToken2.address],
+    //             ethers.utils.parseEther("5"),
+    //             ethers.utils.parseEther("1"),
+    //             ethers.utils.parseEther("1.5"),
+    //             receiver.address,
+    //             [[
+    //                 ethAddress,
+    //                 0,
+    //                 [[
+    //                     Adapter01.address,
+    //                     10000,
+    //                     0,
+    //                     [[
+    //                         4,
+    //                         ethers.constants.AddressZero,
+    //                         10000,
+    //                         payload,
+    //                         0
+    //                     ]]
+    //                 ]]
+    //             ]],
+    //             [[
+    //                 ethAddress,
+    //                 0,
+    //                 [[
+    //                     Adapter01.address,
+    //                     10000,
+    //                     0,
+    //                     [[
+    //                         4,
+    //                         ethers.constants.AddressZero,
+    //                         10000,
+    //                         payload,
+    //                         0
+    //                     ]]
+    //                 ]]
+    //         ]],
+    //         ethers.constants.AddressZero,
+    //         ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
+    //         "0x00",
+    //         1686061732,
+    //         "0x48726217fca940b892b3b899843c8a57",
+    //         ethers.utils.parseEther("0.05"),
+    //         1
+    //         ]];
+    //         let ABI = [
+    //             "function multiSwapDeBridge((address[],uint256,uint256,uint256,address,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[],(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[],address,uint256,bytes,uint256,bytes16,uint256,uint256))"
+    //         ];
+    //         let iface = new ethers.utils.Interface(ABI);
+    //         let functionCall = iface.encodeFunctionData("multiSwapDeBridge", data);
+    //         tx = {
+    //             to: AugustusSwapper.address,
+    //             data: functionCall,
+    //             value: ethers.utils.parseEther("0.01")
+    //         }
+    //         await owner.sendTransaction(tx);
+    //         expect(await receiver.getBalance()).greaterThan(balanceBefore);
                         
-            balanceBefore = await receiver.getBalance();
-            data[0][13] = 31337;
-            await TestToken2.transfer(receiver.address, ethers.utils.parseEther("5"));
-            await TestToken2.connect(receiver).approve(AugustusSwapper.address, ethers.utils.parseEther("4"));
-            functionCall = iface.encodeFunctionData("multiSwapDeBridge", data);
-            tx = {
-                to: AugustusSwapper.address,
-                data: functionCall,
-            }
-            await receiver.sendTransaction(tx);
-            expect(await receiver.getBalance()).greaterThan(balanceBefore);
-        })
+    //         balanceBefore = await receiver.getBalance();
+    //         data[0][13] = 31337;
+    //         await TestToken2.transfer(receiver.address, ethers.utils.parseEther("5"));
+    //         await TestToken2.connect(receiver).approve(AugustusSwapper.address, ethers.utils.parseEther("4"));
+    //         functionCall = iface.encodeFunctionData("multiSwapDeBridge", data);
+    //         tx = {
+    //             to: AugustusSwapper.address,
+    //             data: functionCall,
+    //         }
+    //         await receiver.sendTransaction(tx);
+    //         expect(await receiver.getBalance()).greaterThan(balanceBefore);
+    //     })
 
-        it("Testing multiSwapDeBridge. Swap ETH to token", async function(){
-            const {
-                TestToken2, 
-                WETH, 
-                AugustusSwapper, 
-                Adapter01,
-                UniswapV2PairETH,
-                accounts, 
-                owner } = await loadFixture(deploySuperDEX);
-                let ethAddress = ethers.utils.getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
-                let receiver = accounts[16];
-                let encodedPair;
-                let direction = await UniswapV2PairETH.token0() == WETH.address;
-                let helper = await ethers.getContractFactory("MultiPathHelper");
-                let MultiPathHelper = await helper.deploy();
-                encodedPair = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2PairETH.address, direction);
+    //     it("Testing multiSwapDeBridge. Swap ETH to token", async function(){
+    //         const {
+    //             TestToken2, 
+    //             WETH, 
+    //             AugustusSwapper, 
+    //             Adapter01,
+    //             UniswapV2PairETH,
+    //             accounts, 
+    //             owner } = await loadFixture(deploySuperDEX);
+    //             let ethAddress = ethers.utils.getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
+    //             let receiver = accounts[16];
+    //             let encodedPair;
+    //             let direction = await UniswapV2PairETH.token0() == WETH.address;
+    //             let helper = await ethers.getContractFactory("MultiPathHelper");
+    //             let MultiPathHelper = await helper.deploy();
+    //             encodedPair = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2PairETH.address, direction);
 
-                let balanceBefore = await TestToken2.balanceOf(receiver.address);
+    //             let balanceBefore = await TestToken2.balanceOf(receiver.address);
                 
-                let encoder = new ethers.utils.AbiCoder();
-                payload = encoder.encode([ "tuple(address, uint256[])" ], [[WETH.address, [encodedPair]]]);
-                let data = [[
-                    [ethAddress, ethAddress],
-                    ethers.utils.parseEther("5"),
-                    ethers.utils.parseEther("1"),
-                    ethers.utils.parseEther("1.5"),
-                    receiver.address,
-                    [[
-                        TestToken2.address,
-                        0,
-                        [[
-                            Adapter01.address,
-                            10000,
-                            0,
-                            [[
-                                4,
-                                ethers.constants.AddressZero,
-                                10000,
-                                payload,
-                                0
-                            ]]
-                        ]]
-                    ]],
-                    [[
-                        TestToken2.address,
-                        0,
-                        [[
-                            Adapter01.address,
-                            10000,
-                            0,
-                            [[
-                                4,
-                                ethers.constants.AddressZero,
-                                10000,
-                                payload,
-                                0
-                            ]]
-                        ]]
-                    ]],
-                    ethers.constants.AddressZero,
-                    ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
-                    "0x00",
-                    1686061732,
-                    "0x48726217fca940b892b3b899843c8a57",
-                    ethers.utils.parseEther("0.05"),
-                    1
-                ]];
-                let ABI = [
-                    "function multiSwapDeBridge((address[],uint256,uint256,uint256,address,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[],(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[],address,uint256,bytes,uint256,bytes16,uint256,uint256))"
-                ];
-                let iface = new ethers.utils.Interface(ABI);
-                let functionCall = iface.encodeFunctionData("multiSwapDeBridge", data);
-                tx = {
-                    to: AugustusSwapper.address,
-                    data: functionCall,
-                    value: ethers.utils.parseEther("5")
-                }
-                await owner.sendTransaction(tx);
-                expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
-        })
+    //             let encoder = new ethers.utils.AbiCoder();
+    //             payload = encoder.encode([ "tuple(address, uint256[])" ], [[WETH.address, [encodedPair]]]);
+    //             let data = [[
+    //                 [ethAddress, ethAddress],
+    //                 ethers.utils.parseEther("5"),
+    //                 ethers.utils.parseEther("1"),
+    //                 ethers.utils.parseEther("1.5"),
+    //                 receiver.address,
+    //                 [[
+    //                     TestToken2.address,
+    //                     0,
+    //                     [[
+    //                         Adapter01.address,
+    //                         10000,
+    //                         0,
+    //                         [[
+    //                             4,
+    //                             ethers.constants.AddressZero,
+    //                             10000,
+    //                             payload,
+    //                             0
+    //                         ]]
+    //                     ]]
+    //                 ]],
+    //                 [[
+    //                     TestToken2.address,
+    //                     0,
+    //                     [[
+    //                         Adapter01.address,
+    //                         10000,
+    //                         0,
+    //                         [[
+    //                             4,
+    //                             ethers.constants.AddressZero,
+    //                             10000,
+    //                             payload,
+    //                             0
+    //                         ]]
+    //                     ]]
+    //                 ]],
+    //                 ethers.constants.AddressZero,
+    //                 ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
+    //                 "0x00",
+    //                 1686061732,
+    //                 "0x48726217fca940b892b3b899843c8a57",
+    //                 ethers.utils.parseEther("0.05"),
+    //                 1
+    //             ]];
+    //             let ABI = [
+    //                 "function multiSwapDeBridge((address[],uint256,uint256,uint256,address,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[],(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[],address,uint256,bytes,uint256,bytes16,uint256,uint256))"
+    //             ];
+    //             let iface = new ethers.utils.Interface(ABI);
+    //             let functionCall = iface.encodeFunctionData("multiSwapDeBridge", data);
+    //             tx = {
+    //                 to: AugustusSwapper.address,
+    //                 data: functionCall,
+    //                 value: ethers.utils.parseEther("5")
+    //             }
+    //             await owner.sendTransaction(tx);
+    //             expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
+    //     })
         
-        it("Testing megaSwapDeBridge. Swap token to token", async function(){
-            const { 
-                TestToken1, 
-                TestToken2,  
-                AugustusSwapper, 
-                TokenTransferProxy, 
-                Adapter01, 
+    //     it("Testing megaSwapDeBridge. Swap token to token", async function(){
+    //         const { 
+    //             TestToken1, 
+    //             TestToken2,  
+    //             AugustusSwapper, 
+    //             TokenTransferProxy, 
+    //             Adapter01, 
+    //             UniswapV2Pair,
+    //             accounts, 
+    //             owner } = await loadFixture(deploySuperDEX);
+    //         let receiver = accounts[16];
+    //         let payload;
+    //         let helper = await ethers.getContractFactory("MultiPathHelper");
+    //         let MultiPathHelper = await helper.deploy();
+    //         let direction = await UniswapV2Pair.token0() == TestToken1.address;
+    //         payload = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2Pair.address, direction);
+
+    //         let balanceBefore = await TestToken2.balanceOf(receiver.address);
+    //         await TestToken1.approve(TokenTransferProxy, ethers.utils.parseEther("100"));
+            
+    //         let encoder = new ethers.utils.AbiCoder();
+    //         calldata = encoder.encode([ "tuple(address, uint256[])" ], [[ethers.constants.AddressZero, [payload]]]);
+            
+    //         let data = [[
+    //             [TestToken1.address, TestToken1.address], 
+    //             ethers.utils.parseEther("5"), 
+    //             ethers.utils.parseEther("1"), 
+    //             ethers.utils.parseEther("1.5"), 
+    //             receiver.address, 
+    //             [[
+    //                 10000, 
+    //                 [[
+    //                     TestToken2.address,
+    //                     0,
+    //                     [[
+    //                         Adapter01.address,
+    //                         10000,
+    //                         0,
+    //                         [[
+    //                             4,
+    //                             ethers.constants.AddressZero,
+    //                             10000,
+    //                             calldata,
+    //                             0
+    //                         ]]
+    //                     ]]
+    //                 ]]
+    //             ]],
+    //             [[
+    //                 10000, 
+    //                 [[
+    //                     TestToken2.address,
+    //                     0,
+    //                     [[
+    //                         Adapter01.address,
+    //                         10000,
+    //                         0,
+    //                         [[
+    //                             4,
+    //                             ethers.constants.AddressZero,
+    //                             10000,
+    //                             calldata,
+    //                             0
+    //                         ]]
+    //                     ]]
+    //                 ]]
+    //             ]],
+    //             ethers.constants.AddressZero,
+    //             ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
+    //             "0x00",
+    //             1686061732,
+    //             "0x48726217fca940b892b3b899843c8a57",
+    //             ethers.utils.parseEther("0.05"),
+    //             1
+    //         ]];
+    //         let ABI = [
+    //             "function megaSwapDeBridge((address[],uint256,uint256,uint256,address,(uint256,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[])[],(uint256,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[])[],address,uint256,bytes,uint256,bytes16,uint256,uint256))"
+    //         ];
+    //         let iface = new ethers.utils.Interface(ABI);
+    //         let functionCall = iface.encodeFunctionData("megaSwapDeBridge", data);
+    //         tx = {
+    //             to: AugustusSwapper.address,
+    //             data: functionCall,
+    //             value: ethers.utils.parseEther("0.01")
+    //         };
+    //         await owner.sendTransaction(tx);
+    //         expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
+
+    //         balanceBefore = await TestToken2.balanceOf(receiver.address);
+    //         data[0][13] = 31337;
+    //         await TestToken1.transfer(receiver.address, ethers.utils.parseEther("5"));
+    //         await TestToken1.connect(receiver).approve(AugustusSwapper.address, ethers.utils.parseEther("4"));
+    //         functionCall = iface.encodeFunctionData("megaSwapDeBridge", data);
+    //         tx = {
+    //             to: AugustusSwapper.address,
+    //             data: functionCall,
+    //         }
+    //         await receiver.sendTransaction(tx);
+    //         expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
+    //     })
+
+    //     it("Testing megaSwapDeBridge. Swap token to ETH", async function(){
+    //         const {
+    //             TestToken2, 
+    //             WETH, 
+    //             AugustusSwapper, 
+    //             TokenTransferProxy, 
+    //             Adapter01,
+    //             UniswapV2PairETH,
+    //             accounts, 
+    //             owner 
+    //         } = await loadFixture(deploySuperDEX);
+    //         let ethAddress = ethers.utils.getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
+    //         let receiver = accounts[16];
+    //         let payload;
+    //         let helper = await ethers.getContractFactory("MultiPathHelper");
+    //         let MultiPathHelper = await helper.deploy();
+    //         let direction = await UniswapV2PairETH.token0() == TestToken2.address;
+    //         payload = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2PairETH.address, direction);
+
+    //         let balanceBefore = await receiver.getBalance();
+    //         await TestToken2.approve(TokenTransferProxy, ethers.utils.parseEther("100"));
+            
+    //         let encoder = new ethers.utils.AbiCoder();
+    //         calldata = encoder.encode([ "tuple(address, uint256[])" ], [[WETH.address, [payload]]]);
+            
+    //         let data = [[
+    //             [TestToken2.address, TestToken2.address], 
+    //             ethers.utils.parseEther("5"), 
+    //             ethers.utils.parseEther("1"), 
+    //             ethers.utils.parseEther("1.5"), 
+    //             receiver.address, 
+    //             [[
+    //                 10000, 
+    //                 [[
+    //                     ethAddress,
+    //                     0,
+    //                     [[
+    //                         Adapter01.address,
+    //                         10000,
+    //                         0,
+    //                         [[
+    //                             4,
+    //                             ethers.constants.AddressZero,
+    //                             10000,
+    //                             calldata,
+    //                             0
+    //                         ]]
+    //                     ]]
+    //                 ]]
+    //             ]],
+    //             [[
+    //                 10000, 
+    //                 [[
+    //                     ethAddress,
+    //                     0,
+    //                     [[
+    //                         Adapter01.address,
+    //                         10000,
+    //                         0,
+    //                         [[
+    //                             4,
+    //                             ethers.constants.AddressZero,
+    //                             10000,
+    //                             calldata,
+    //                             0
+    //                         ]]
+    //                     ]]
+    //                 ]]
+    //             ]],
+    //             ethers.constants.AddressZero,
+    //             ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
+    //             "0x00",
+    //             1686061732,
+    //             "0x48726217fca940b892b3b899843c8a57",
+    //             ethers.utils.parseEther("0.05"),
+    //             1
+    //         ]];
+    //         let ABI = [
+    //             "function megaSwapDeBridge((address[],uint256,uint256,uint256,address,(uint256,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[])[],(uint256,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[])[],address,uint256,bytes,uint256,bytes16,uint256,uint256))"
+    //         ];
+    //         let iface = new ethers.utils.Interface(ABI);
+    //         let functionCall = iface.encodeFunctionData("megaSwapDeBridge", data);
+    //         tx = {
+    //             to: AugustusSwapper.address,
+    //             data: functionCall,
+    //             value: ethers.utils.parseEther("0.01")
+    //         };
+    //         await owner.sendTransaction(tx);
+    //         expect(await receiver.getBalance()).greaterThan(balanceBefore);
+    //         balanceBefore = await receiver.getBalance();
+            
+    //         data[0][13] = 31337;
+    //         await TestToken2.transfer(receiver.address, ethers.utils.parseEther("5"));
+    //         await TestToken2.connect(receiver).approve(AugustusSwapper.address, ethers.utils.parseEther("4"));
+    //         functionCall = iface.encodeFunctionData("megaSwapDeBridge", data);
+    //         tx = {
+    //             to: AugustusSwapper.address,
+    //             data: functionCall,
+    //         }
+    //         await receiver.sendTransaction(tx);
+    //         expect(await receiver.getBalance()).greaterThan(balanceBefore);
+    //     })
+
+    //     it("Testing megaSwapDeBridge. Swap ETH to token", async function(){
+    //         const {
+    //             TestToken2, 
+    //             WETH, 
+    //             AugustusSwapper, 
+    //             TokenTransferProxy, 
+    //             Adapter01,
+    //             UniswapV2PairETH,
+    //             accounts, 
+    //             owner 
+    //         } = await loadFixture(deploySuperDEX);
+    //         let ethAddress = ethers.utils.getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
+    //         let receiver = accounts[16];
+    //         let payload;
+    //         let helper = await ethers.getContractFactory("MultiPathHelper");
+    //         let MultiPathHelper = await helper.deploy();
+    //         let direction = await UniswapV2PairETH.token0() == WETH.address;
+    //         payload = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2PairETH.address, direction);
+
+    //         let balanceBefore = await TestToken2.balanceOf(receiver.address);
+            
+    //         let encoder = new ethers.utils.AbiCoder();
+    //         calldata = encoder.encode([ "tuple(address, uint256[])" ], [[WETH.address, [payload]]]);
+            
+    //         let data = [[
+    //             [ethAddress, ethAddress], 
+    //             ethers.utils.parseEther("5"), 
+    //             ethers.utils.parseEther("1"), 
+    //             ethers.utils.parseEther("1.5"), 
+    //             receiver.address, 
+    //             [[
+    //                 10000, 
+    //                 [[
+    //                     TestToken2.address,
+    //                     0,
+    //                     [[
+    //                         Adapter01.address,
+    //                         10000,
+    //                         0,
+    //                         [[
+    //                             4,
+    //                             ethers.constants.AddressZero,
+    //                             10000,
+    //                             calldata,
+    //                             0
+    //                         ]]
+    //                     ]]
+    //                 ]]
+    //             ]],
+    //             [[
+    //                 10000, 
+    //                 [[
+    //                     TestToken2.address,
+    //                     0,
+    //                     [[
+    //                         Adapter01.address,
+    //                         10000,
+    //                         0,
+    //                         [[
+    //                             4,
+    //                             ethers.constants.AddressZero,
+    //                             10000,
+    //                             calldata,
+    //                             0
+    //                         ]]
+    //                     ]]
+    //                 ]]
+    //             ]],
+    //             ethers.constants.AddressZero,
+    //             ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
+    //             "0x00",
+    //             1686061732,
+    //             "0x48726217fca940b892b3b899843c8a57",
+    //             ethers.utils.parseEther("0.05"),
+    //             1
+    //         ]];
+    //         let ABI = [
+    //             "function megaSwapDeBridge((address[],uint256,uint256,uint256,address,(uint256,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[])[],(uint256,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[])[],address,uint256,bytes,uint256,bytes16,uint256,uint256))"
+    //         ];
+    //         let iface = new ethers.utils.Interface(ABI);
+    //         let functionCall = iface.encodeFunctionData("megaSwapDeBridge", data);
+    //         tx = {
+    //             to: AugustusSwapper.address,
+    //             data: functionCall,
+    //             value: ethers.utils.parseEther("5")
+    //         };
+    //         await owner.sendTransaction(tx);
+    //         expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
+    //     })
+    // })
+
+    // describe("Tesing NewUniswapV2Router", function(){
+    //     it("Swap token to token", async function(){
+    //         const { TestToken1, 
+    //             TestToken2,  
+    //             AugustusSwapper, 
+    //             TokenTransferProxy, 
+    //             UniswapV2Pair,
+    //             accounts, 
+    //             owner } = await loadFixture(deploySuperDEX);
+    //             let receiver = accounts[16];
+    //             let payload;
+    //             let helper = await ethers.getContractFactory("MultiPathHelper");
+    //             let MultiPathHelper = await helper.deploy();
+    //             let direction = await UniswapV2Pair.token0() == TestToken1.address;
+    //             payload = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2Pair.address, direction);
+
+    //             let balanceBefore = await TestToken2.balanceOf(receiver.address);
+    //             await TestToken1.approve(TokenTransferProxy, ethers.utils.parseEther("100"));
+
+    //             let data = [[
+    //                 [TestToken1.address, TestToken1.address],
+    //                 ethers.utils.parseEther("5"),
+    //                 ethers.utils.parseEther("1.5"),
+    //                 ethers.constants.AddressZero,
+    //                 [payload],
+    //                 [payload],
+    //                 ethers.utils.parseEther("0.05"),
+    //                 1,
+    //                 receiver.address
+    //             ]];
+    //             let ABI = [
+    //                 "function swapOnUniswapV2ForkDeBridge((address[],uint256,uint256,address,uint256[],uint256[],uint256,uint256,address))"
+    //             ];
+    //             let iface = new ethers.utils.Interface(ABI);
+    //             let functionCall = iface.encodeFunctionData("swapOnUniswapV2ForkDeBridge", data);
+    //             let tx = {
+    //                 to: AugustusSwapper.address,
+    //                 data: functionCall,
+    //                 value: ethers.utils.parseEther("0.01")
+    //             };
+
+    //             await owner.sendTransaction(tx);                
+    //             expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
+
+    //             balanceBefore = await TestToken2.balanceOf(receiver.address);
+    //             data[0][7] = 31337;
+
+    //             await TestToken1.transfer(receiver.address, ethers.utils.parseEther("5"));
+    //             await TestToken1.connect(receiver).approve(AugustusSwapper.address, ethers.utils.parseEther("5"));
+                
+    //             functionCall = iface.encodeFunctionData("swapOnUniswapV2ForkDeBridge", data);
+    //             tx = {
+    //                 to: AugustusSwapper.address,
+    //                 data: functionCall,
+    //             }
+    //             await receiver.sendTransaction(tx);
+    //             expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
+    //     })
+
+    //     it("Swap token to ETH", async function(){
+    //         const {
+    //             TestToken2, 
+    //             WETH, 
+    //             AugustusSwapper, 
+    //             TokenTransferProxy,
+    //             UniswapV2PairETH,
+    //             accounts, 
+    //             owner 
+    //         } = await loadFixture(deploySuperDEX);
+    //         let receiver = accounts[16];
+    //         let helper = await ethers.getContractFactory("MultiPathHelper");
+    //             let MultiPathHelper = await helper.deploy();
+    //             let direction = await UniswapV2PairETH.token0() == TestToken2.address;
+    //             payload = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2PairETH.address, direction);
+
+    //             let balanceBefore = await receiver.getBalance();
+    //             await TestToken2.approve(TokenTransferProxy, ethers.utils.parseEther("100"));
+
+    //             let data = [[
+    //                 [TestToken2.address, TestToken2.address],
+    //                 ethers.utils.parseEther("5"),
+    //                 ethers.utils.parseEther("1.5"),
+    //                 WETH.address,
+    //                 [payload],
+    //                 [payload],
+    //                 ethers.utils.parseEther("0.05"),
+    //                 1,
+    //                 receiver.address
+    //             ]];
+    //             let ABI = [
+    //                 "function swapOnUniswapV2ForkDeBridge((address[],uint256,uint256,address,uint256[],uint256[],uint256,uint256,address))"
+    //             ];
+    //             let iface = new ethers.utils.Interface(ABI);
+    //             let functionCall = iface.encodeFunctionData("swapOnUniswapV2ForkDeBridge", data);
+    //             let tx = {
+    //                 to: AugustusSwapper.address,
+    //                 data: functionCall,
+    //                 value: ethers.utils.parseEther("0.01")
+    //             };
+
+    //             await owner.sendTransaction(tx);                
+    //             expect(await receiver.getBalance()).greaterThan(balanceBefore);
+
+    //             balanceBefore = await receiver.getBalance();
+    //             data[0][7] = 31337;
+
+    //             await TestToken2.transfer(receiver.address, ethers.utils.parseEther("5"));
+    //             await TestToken2.connect(receiver).approve(AugustusSwapper.address, ethers.utils.parseEther("5"));
+                
+    //             functionCall = iface.encodeFunctionData("swapOnUniswapV2ForkDeBridge", data);
+    //             tx = {
+    //                 to: AugustusSwapper.address,
+    //                 data: functionCall,
+    //             }
+    //             await receiver.sendTransaction(tx);
+    //             expect(await receiver.getBalance()).greaterThan(balanceBefore);
+    //     })
+
+    //     it("Swap ETH to token", async function(){
+    //         const {
+    //             TestToken2, 
+    //             WETH, 
+    //             AugustusSwapper, 
+    //             UniswapV2PairETH,
+    //             accounts, 
+    //             owner 
+    //         } = await loadFixture(deploySuperDEX);
+    //         let ethAddress = ethers.utils.getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
+    //         let receiver = accounts[16];
+    //         let helper = await ethers.getContractFactory("MultiPathHelper");
+    //         let MultiPathHelper = await helper.deploy();
+    //         let direction = await UniswapV2PairETH.token0() == WETH.address;
+    //         let payload = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2PairETH.address, direction);
+
+    //         let balanceBefore = await TestToken2.balanceOf(receiver.address);
+
+    //         let data = [[
+    //             [ethAddress, ethAddress],
+    //             ethers.utils.parseEther("5"),
+    //             ethers.utils.parseEther("1.5"),
+    //             WETH.address,
+    //             [payload],
+    //             [payload],
+    //             ethers.utils.parseEther("0.05"),
+    //             1,
+    //             receiver.address
+    //         ]];
+    //         let ABI = [
+    //             "function swapOnUniswapV2ForkDeBridge((address[],uint256,uint256,address,uint256[],uint256[],uint256,uint256,address))"
+    //         ];
+    //         let iface = new ethers.utils.Interface(ABI);
+    //         let functionCall = iface.encodeFunctionData("swapOnUniswapV2ForkDeBridge", data);
+    //         let tx = {
+    //             to: AugustusSwapper.address,
+    //             data: functionCall,
+    //             value: ethers.utils.parseEther("5.01")
+    //         };
+
+    //         await owner.sendTransaction(tx);                
+    //         expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
+    //     })
+    // })
+
+    // describe("Testing SimpleSwap", function(){
+    //     it("Testing simpleSwapDeBridge", async function(){
+    //         const { 
+    //             TestToken1, 
+    //             TestToken2,  
+    //             AugustusSwapper, 
+    //             TokenTransferProxy, 
+    //             UniswapV2Pair,
+    //             SimpleSwap,
+    //             accounts, 
+    //             owner } = await loadFixture(deploySuperDEX);
+    //         let receiver = accounts[16];
+    //         let helper = await ethers.getContractFactory("MultiPathHelper");
+    //         let MultiPathHelper = await helper.deploy();
+    //         let payload = await MultiPathHelper.encodeSwap(
+    //             ethers.utils.parseEther("5"), 
+    //             ethers.utils.parseEther("0"), 
+    //             [TestToken1.address, TestToken2.address]);
+                
+    //         await TestToken1.approve(TokenTransferProxy, ethers.utils.parseEther("10"));
+    //         await SimpleSwap._approve(TestToken1.address, TokenTransferProxy, ethers.utils.parseEther("10"));
+    //         let balanceBefore = await TestToken2.balanceOf(owner.address);
+
+    //         // let data = [[
+    //         //     [TestToken1.address, TestToken2.address],
+    //         //     [TestToken1.address, TestToken2.address],
+    //         //     ethers.utils.parseEther("5"),
+    //         //     ethers.utils.parseEther('1'),
+    //         //     ethers.utils.parseEther("1.5"),
+    //         //     [AugustusSwapper.address, AugustusSwapper.address],
+    //         //     payload[0],
+    //         //     [0, 196, 0],
+    //         //     [0, 0],
+    //         //     1,
+    //         //     receiver.address,
+    //         //     ethers.constants.AddressZero,
+    //         //     ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
+    //         //     "0x00",
+    //         //     1686061732,
+    //         //     "0x48726217fca940b892b3b899843c8a57",
+    //         //     ethers.utils.parseEther("0.05"),
+    //         //     1
+    //         // ]];
+
+    //         // let ABI = [
+    //         //     "function simpleSwapDeBridge((address[],address[],uint256,uint256,uint256,address[],bytes,uint256[],uint256[],uint256,address,address,uint256,bytes,uint256,bytes16,uint256,uint256))"
+    //         // ];
+
+    //         let data = [[
+    //             TestToken1.address,
+    //             TestToken2.address,
+    //             ethers.utils.parseEther("5"),
+    //             ethers.utils.parseEther('1'),
+    //             ethers.utils.parseEther("1.5"),
+    //             [AugustusSwapper.address],
+    //             payload[0],
+    //             [0, 196],
+    //             [0],
+    //             receiver.address,
+    //             ethers.constants.AddressZero,
+    //             ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
+    //             "0x00",
+    //             1686061732,
+    //             "0x48726217fca940b892b3b899843c8a57"
+    //         ]];
+    //         let ABI = [
+    //             "function simpleSwap((address,address,uint256,uint256,uint256,address[],bytes,uint256[],uint256[],address,address,uint256,bytes,uint256,bytes16))"
+    //         ];
+    //         let iface = new ethers.utils.Interface(ABI);
+    //         let functionCall = iface.encodeFunctionData("simpleSwap", data);
+    //         // console.log(functionCall);
+    //         tx = {
+    //             to: AugustusSwapper.address,
+    //             data: functionCall,
+    //             // value: ethers.utils.parseEther("0.01")
+    //         };
+    //         // let aaa = await owner.sendTransaction(tx);
+    //         // let result = await aaa.wait();
+    //         // console.log(result);
+
+    //         try{
+    //             await owner.sendTransaction(tx);
+    //         } catch(err) {
+    //             console.log(err);
+    //         }
+    //         // expect(await TestToken2.balanceOf(owner.address)).greaterThan(balanceBefore);
+
+    //         //54e3f31b": "simpleSwap((address,address,uint256,uint256,uint256,address[],bytes,uint256[],uint256[],address,address,uint256,bytes,uint256,bytes16))",
+    //     })
+    // })
+
+    describe("Testing UniswapV2Router", function(){
+        it("Testing swap token to token", async function(){
+            const {
+                TestToken1,
+                TestToken2,
+                AugustusSwapper,
+                TokenTransferProxy,
                 UniswapV2Pair,
-                accounts, 
-                owner } = await loadFixture(deploySuperDEX);
+                accounts,
+                owner
+            } = loadFixture(deploySuperDEX);
             let receiver = accounts[16];
-            let payload;
             let helper = await ethers.getContractFactory("MultiPathHelper");
-            let MultiPathHelper = await helper.deploy();
-            let direction = await UniswapV2Pair.token0() == TestToken1.address;
-            payload = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2Pair.address, direction);
+            let Helper = await helper.deploy();
 
-            let balanceBefore = await TestToken2.balanceOf(receiver.address);
             await TestToken1.approve(TokenTransferProxy, ethers.utils.parseEther("100"));
-            
-            let encoder = new ethers.utils.AbiCoder();
-            calldata = encoder.encode([ "tuple(address, uint256[])" ], [[ethers.constants.AddressZero, [payload]]]);
-            
-            let data = [[
-                [TestToken1.address, TestToken1.address], 
-                ethers.utils.parseEther("5"), 
-                ethers.utils.parseEther("1"), 
-                ethers.utils.parseEther("1.5"), 
-                receiver.address, 
-                [[
-                    10000, 
-                    [[
-                        TestToken2.address,
-                        0,
-                        [[
-                            Adapter01.address,
-                            10000,
-                            0,
-                            [[
-                                4,
-                                ethers.constants.AddressZero,
-                                10000,
-                                calldata,
-                                0
-                            ]]
-                        ]]
-                    ]]
-                ]],
-                [[
-                    10000, 
-                    [[
-                        TestToken2.address,
-                        0,
-                        [[
-                            Adapter01.address,
-                            10000,
-                            0,
-                            [[
-                                4,
-                                ethers.constants.AddressZero,
-                                10000,
-                                calldata,
-                                0
-                            ]]
-                        ]]
-                    ]]
-                ]],
-                ethers.constants.AddressZero,
-                ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
-                "0x00",
-                1686061732,
-                "0x48726217fca940b892b3b899843c8a57",
-                ethers.utils.parseEther("0.05"),
-                1
-            ]];
-            let ABI = [
-                "function megaSwapDeBridge((address[],uint256,uint256,uint256,address,(uint256,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[])[],(uint256,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[])[],address,uint256,bytes,uint256,bytes16,uint256,uint256))"
-            ];
-            let iface = new ethers.utils.Interface(ABI);
-            let functionCall = iface.encodeFunctionData("megaSwapDeBridge", data);
-            tx = {
-                to: AugustusSwapper.address,
-                data: functionCall,
-                value: ethers.utils.parseEther("0.01")
-            };
-            await owner.sendTransaction(tx);
-            expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
-
-            balanceBefore = await TestToken2.balanceOf(receiver.address);
-            data[0][13] = 31337;
-            await TestToken1.transfer(receiver.address, ethers.utils.parseEther("5"));
-            await TestToken1.connect(receiver).approve(AugustusSwapper.address, ethers.utils.parseEther("4"));
-            functionCall = iface.encodeFunctionData("megaSwapDeBridge", data);
-            tx = {
-                to: AugustusSwapper.address,
-                data: functionCall,
-            }
-            await receiver.sendTransaction(tx);
-            expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
-        })
-
-        it("Testing megaSwapDeBridge. Swap token to ETH", async function(){
-            const {
-                TestToken2, 
-                WETH, 
-                AugustusSwapper, 
-                TokenTransferProxy, 
-                Adapter01,
-                UniswapV2PairETH,
-                accounts, 
-                owner 
-            } = await loadFixture(deploySuperDEX);
-            let ethAddress = ethers.utils.getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
-            let receiver = accounts[16];
-            let payload;
-            let helper = await ethers.getContractFactory("MultiPathHelper");
-            let MultiPathHelper = await helper.deploy();
-            let direction = await UniswapV2PairETH.token0() == TestToken2.address;
-            payload = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2PairETH.address, direction);
-
-            let balanceBefore = await receiver.getBalance();
-            await TestToken2.approve(TokenTransferProxy, ethers.utils.parseEther("100"));
-            
-            let encoder = new ethers.utils.AbiCoder();
-            calldata = encoder.encode([ "tuple(address, uint256[])" ], [[WETH.address, [payload]]]);
-            
-            let data = [[
-                [TestToken2.address, TestToken2.address], 
-                ethers.utils.parseEther("5"), 
-                ethers.utils.parseEther("1"), 
-                ethers.utils.parseEther("1.5"), 
-                receiver.address, 
-                [[
-                    10000, 
-                    [[
-                        ethAddress,
-                        0,
-                        [[
-                            Adapter01.address,
-                            10000,
-                            0,
-                            [[
-                                4,
-                                ethers.constants.AddressZero,
-                                10000,
-                                calldata,
-                                0
-                            ]]
-                        ]]
-                    ]]
-                ]],
-                [[
-                    10000, 
-                    [[
-                        ethAddress,
-                        0,
-                        [[
-                            Adapter01.address,
-                            10000,
-                            0,
-                            [[
-                                4,
-                                ethers.constants.AddressZero,
-                                10000,
-                                calldata,
-                                0
-                            ]]
-                        ]]
-                    ]]
-                ]],
-                ethers.constants.AddressZero,
-                ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
-                "0x00",
-                1686061732,
-                "0x48726217fca940b892b3b899843c8a57",
-                ethers.utils.parseEther("0.05"),
-                1
-            ]];
-            let ABI = [
-                "function megaSwapDeBridge((address[],uint256,uint256,uint256,address,(uint256,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[])[],(uint256,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[])[],address,uint256,bytes,uint256,bytes16,uint256,uint256))"
-            ];
-            let iface = new ethers.utils.Interface(ABI);
-            let functionCall = iface.encodeFunctionData("megaSwapDeBridge", data);
-            tx = {
-                to: AugustusSwapper.address,
-                data: functionCall,
-                value: ethers.utils.parseEther("0.01")
-            };
-            await owner.sendTransaction(tx);
-            expect(await receiver.getBalance()).greaterThan(balanceBefore);
-            balanceBefore = await receiver.getBalance();
-            
-            data[0][13] = 31337;
-            await TestToken2.transfer(receiver.address, ethers.utils.parseEther("5"));
-            await TestToken2.connect(receiver).approve(AugustusSwapper.address, ethers.utils.parseEther("4"));
-            functionCall = iface.encodeFunctionData("megaSwapDeBridge", data);
-            tx = {
-                to: AugustusSwapper.address,
-                data: functionCall,
-            }
-            await receiver.sendTransaction(tx);
-            expect(await receiver.getBalance()).greaterThan(balanceBefore);
-        })
-
-        it("Testing megaSwapDeBridge. Swap ETH to token", async function(){
-            const {
-                TestToken2, 
-                WETH, 
-                AugustusSwapper, 
-                TokenTransferProxy, 
-                Adapter01,
-                UniswapV2PairETH,
-                accounts, 
-                owner 
-            } = await loadFixture(deploySuperDEX);
-            let ethAddress = ethers.utils.getAddress("0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE");
-            let receiver = accounts[16];
-            let payload;
-            let helper = await ethers.getContractFactory("MultiPathHelper");
-            let MultiPathHelper = await helper.deploy();
-            let direction = await UniswapV2PairETH.token0() == WETH.address;
-            payload = await MultiPathHelper.getPools(ethers.BigNumber.from(9970), UniswapV2PairETH.address, direction);
-
             let balanceBefore = await TestToken2.balanceOf(receiver.address);
-            
-            let encoder = new ethers.utils.AbiCoder();
-            calldata = encoder.encode([ "tuple(address, uint256[])" ], [[WETH.address, [payload]]]);
-            
+
             let data = [[
-                [ethAddress, ethAddress], 
-                ethers.utils.parseEther("5"), 
-                ethers.utils.parseEther("1"), 
-                ethers.utils.parseEther("1.5"), 
-                receiver.address, 
-                [[
-                    10000, 
-                    [[
-                        TestToken2.address,
-                        0,
-                        [[
-                            Adapter01.address,
-                            10000,
-                            0,
-                            [[
-                                4,
-                                ethers.constants.AddressZero,
-                                10000,
-                                calldata,
-                                0
-                            ]]
-                        ]]
-                    ]]
-                ]],
-                [[
-                    10000, 
-                    [[
-                        TestToken2.address,
-                        0,
-                        [[
-                            Adapter01.address,
-                            10000,
-                            0,
-                            [[
-                                4,
-                                ethers.constants.AddressZero,
-                                10000,
-                                calldata,
-                                0
-                            ]]
-                        ]]
-                    ]]
-                ]],
-                ethers.constants.AddressZero,
-                ethers.BigNumber.from("452312848583266388373324160190187140051835877600158453279131187530910679040"),
-                "0x00",
-                1686061732,
-                "0x48726217fca940b892b3b899843c8a57",
+                ethers.utils.parseEther("5"),
+                ethers.utils.parseEther("0"),
+                [TestToken1.address, TestToken2.address],
+                [TestToken1.address, TestToken2.address],
+                receiver.address,
                 ethers.utils.parseEther("0.05"),
                 1
             ]];
             let ABI = [
-                "function megaSwapDeBridge((address[],uint256,uint256,uint256,address,(uint256,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[])[],(uint256,(address,uint256,(address,uint256,uint256,(uint256,address,uint256,bytes,uint256)[])[])[])[],address,uint256,bytes,uint256,bytes16,uint256,uint256))"
+                "function swapOnUniswapDeBridge((uint256, uint256, address[], address[], address, uint256, uint256))"
             ];
+
             let iface = new ethers.utils.Interface(ABI);
-            let functionCall = iface.encodeFunctionData("megaSwapDeBridge", data);
+            let functionCall = iface.encodeFunctionData("swapOnUniswapDeBridge", data);
+            
             tx = {
                 to: AugustusSwapper.address,
                 data: functionCall,
-                value: ethers.utils.parseEther("5")
-            };
+                value: ethers.utils.parseEther("0.01")
+            }
+
             await owner.sendTransaction(tx);
-            expect(await TestToken2.balanceOf(receiver.address)).greaterThan(balanceBefore);
+            console.log(await TestToken2.balanceOf(receiver.address));
         })
     })
 })

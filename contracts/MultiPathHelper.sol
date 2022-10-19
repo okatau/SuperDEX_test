@@ -14,4 +14,13 @@ contract MultiPathHelper{
             return (((fee << 161) + uint256(uint160(pair)) - 1461501637330902918203684832716283019655932542976));
         }
     }
+
+    function encodeSwap(
+        uint amountIn, 
+        uint amountOut, 
+        address[] calldata path
+        ) public view returns (bytes memory data, uint256 length){
+        data = abi.encodeWithSignature("swapOnUniswap(uint256,uint256,address[])", amountIn, amountOut, path);
+        length = data.length;
+    }
 }

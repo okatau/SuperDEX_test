@@ -19,6 +19,18 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
     using Flags for uint256;
     address public immutable augustusRFQ;
 
+    struct SwapData{
+        bool currentChain;
+        address[] path;
+        uint256 fromAmount;
+        address beneficiary;
+        bytes exchangeData;
+        uint256[] startIndexes;
+        uint256[] values;
+    }
+
+    event LastBalance(address _token, uint256 balance);
+
     /*solhint-disable no-empty-blocks*/
     constructor(
         uint256 _partnerSharePercent,
@@ -90,28 +102,27 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
         returns (uint256 receivedAmount)
     {
         require(data.deadline >= block.timestamp, "Deadline breached");
-        data.beneficiary = data.beneficiary == address(0)
-            ? payable(msg.sender)
-            : data.beneficiary;
+        require(data.beneficiary != address(0), "Beneficiary can't be zero address");
+        SwapData memory tempData = getDataToSwap(data);
         (receivedAmount) = performSimpleSwapDeBridge(
             data.callees,
-            data.exchangeData,
-            data.startIndexes,
-            data.values,
-            data.pathBeforeSend,
-            data.fromAmount,
+            tempData.exchangeData,
+            tempData.startIndexes,
+            tempData.values,
+            tempData.path,
+            tempData.fromAmount,
             data.toAmount,
             data.expectedAmount,
             data.partner,
             data.feePercent,
             data.permit,
-            payable(address(this)),
+            payable(tempData.beneficiary),
             data.calleesBeforeSend,
-            false
+            tempData.currentChain
         );
 
-        _send(data, receivedAmount);
-
+        // _send(data, receivedAmount);
+        emit LastBalance(tempData.path[tempData.path.length - 1], IERC20(tempData.path[tempData.path.length - 1]).balanceOf(address(this)));
         emit SwappedV3(
             data.uuid,
             data.partner,
@@ -315,6 +326,8 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
         //from sender to this contract
         if (!currentChainId) {
             transferTokensFromProxy(path[0], fromAmount, permit);
+        } else {
+            IERC20(path[0]).transferFrom(msg.sender, address(this), fromAmount);
         }
 
         performCallsDeBridge(
@@ -652,7 +665,10 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
     {
         require(msg.value >= 0.01 ether, "msg.value too low");
         address _bridgeAddress = 0x68D936Cb4723BdD38C488FD50514803f96789d2D;
-        IERC20(data.pathBeforeSend[1]).approve(_bridgeAddress, tokensBought);
+        uint256 lastInThePath = data.pathBeforeSend.length - 1;
+        if (data.pathBeforeSend[lastInThePath] != Utils.ethAddress()){
+            IERC20(data.pathBeforeSend[lastInThePath]).approve(_bridgeAddress, tokensBought);
+        }
         require(
             tokensBought.div(2) >= data.executionFee,
             "insufficient token amount line 642"
@@ -677,30 +693,38 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
             "simpleSwapAfterDeBridge((address[],address[],uint256,uint256,uint256,address[],bytes,uint256[],uint256[],uint256,address,address,uint256,bytes,uint256,bytes16,uint256,uint256))",
             data
         );
-
-        if (data.pathBeforeSend[1] == address(0)) {
-            deBridgeGate.send{value: tokensBought}(
-                address(0),
-                tokensBought,
-                data.chainId,
-                abi.encodePacked(contractAddressTo),
-                "",
-                false,
-                0,
-                abi.encode(autoParams)
-            );
-        } else {
-            deBridgeGate.send{value: msg.value}(
-                data.pathBeforeSend[1],
-                tokensBought,
-                data.chainId,
-                abi.encodePacked(contractAddressTo),
-                "",
-                false,
-                0,
-                abi.encode(autoParams)
-            );
+        emit LastBalance(data.pathBeforeSend[lastInThePath], IERC20(data.pathBeforeSend[lastInThePath]).balanceOf(address(this)));
+        uint256 deBridgeFee = getChainId() == 80001
+            ? 0.1 ether
+            : 0.01 ether;
+        if (data.pathBeforeSend[lastInThePath] != Utils.ethAddress()){
+            Utils.transferTokens(Utils.ethAddress(), payable(contractAddressTo), deBridgeFee);
         }
+        Utils.transferTokens(data.pathBeforeSend[lastInThePath], data.beneficiary, tokensBought);
+
+        // if (data.pathBeforeSend[1] == address(0)) {
+        //     deBridgeGate.send{value: tokensBought}(
+        //         address(0),
+        //         tokensBought,
+        //         data.chainId,
+        //         abi.encodePacked(contractAddressTo),
+        //         "",
+        //         false,
+        //         0,
+        //         abi.encode(autoParams)
+        //     );
+        // } else {
+        //     deBridgeGate.send{value: msg.value}(
+        //         data.pathBeforeSend[1],
+        //         tokensBought,
+        //         data.chainId,
+        //         abi.encodePacked(contractAddressTo),
+        //         "",
+        //         false,
+        //         0,
+        //         abi.encode(autoParams)
+        //     );
+        // }
     }
 
     function _approve(
@@ -728,6 +752,35 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
         );
         data = bytes.concat(data, encodeCall);
         return (data, data.length);
+    }
+
+    function getDataToSwap(Utils.SimpleDataDeBridge memory data) 
+        private 
+        view 
+        returns(SwapData memory)
+        {
+        SwapData memory returnData;
+        returnData.currentChain = data.chainId == getChainId();
+        uint256 deBridgeFee = getChainId() == 80001 ? 0.1 ether : 0.01 ether;
+        (returnData.fromAmount, returnData.beneficiary, returnData.path) = returnData.currentChain ?
+        (IERC20(data.pathAfterSend[0]).allowance(msg.sender, address(this)), data.beneficiary, data.pathAfterSend) :
+        (data.pathBeforeSend[0] == Utils.ethAddress() ? (data.fromAmount - deBridgeFee) : data.fromAmount, address(this), data.pathBeforeSend);
+        returnData.exchangeData = data.exchangeData;
+        returnData.startIndexes = data.startIndexes;
+        returnData.values = data.values;
+        
+        if(returnData.currentChain && (data.pathAfterSend.length >= 2)){
+            (returnData.exchangeData, returnData.startIndexes[data.callees.length]) = encodeFunctionCall(
+                returnData.fromAmount,
+                data.pathAfterSend,
+                data.exchangeData
+            );
+
+            if (data.pathAfterSend[0] == address(0)) {
+                returnData.values[data.callees.length - 1] = returnData.fromAmount;
+            }
+        }
+        return(returnData);
     }
 
     /*solhint-enable no-inline-assembly*/

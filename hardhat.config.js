@@ -24,7 +24,7 @@ module.exports = {
       }
     ],
     overrides: {
-      "contracts/routers/NewUniswapV2ExchangeRouter/NewUniswapV2Router.sol": {
+      "contracts/routers/NewUniswapV2Router/NewUniswapV2Router.sol": {
         version: "0.8.10",
         settings: {
           optimizer: {
@@ -38,7 +38,7 @@ module.exports = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 200
+            runs: 1000
           }
         }
       },
