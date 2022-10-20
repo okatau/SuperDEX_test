@@ -60,6 +60,7 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
         address payable beneficiary = data.beneficiary == address(0)
             ? payable(msg.sender)
             : data.beneficiary;
+        // _approve(data.fromToken, data.toApprove, data.fromAmount);
         receivedAmount = performSimpleSwap(
             data.callees,
             data.exchangeData,
@@ -104,6 +105,7 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
         require(data.deadline >= block.timestamp, "Deadline breached");
         require(data.beneficiary != address(0), "Beneficiary can't be zero address");
         SwapData memory tempData = getDataToSwap(data);
+        _approve(tempData.path[0], data.toApprove, tempData.fromAmount);
         (receivedAmount) = performSimpleSwapDeBridge(
             data.callees,
             tempData.exchangeData,

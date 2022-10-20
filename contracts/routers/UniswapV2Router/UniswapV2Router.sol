@@ -33,6 +33,9 @@ contract UniswapV2Router is AugustusStorage, IRouter, BridgeAppBase, Ownable {
 
     mapping(address => bool) admins;
 
+    event LogBalance(address _token, uint256 balance);
+    event LogData(address token0, address tokenSold, uint256 amount0, uint256 amount1);
+
     constructor(
         address _factory,
         address _weth,
@@ -114,8 +117,7 @@ contract UniswapV2Router is AugustusStorage, IRouter, BridgeAppBase, Ownable {
         uint256 amountIn = _data.amountIn;
 
         if (currentChainId) {
-            amountIn = IERC20(path[0]).balanceOf(msg.sender);
-            IERC20(path[0]).approve(address(getTokenTransferProxy()), amountIn);
+            amountIn = IERC20(path[0]).allowance(msg.sender, address(this));
             IERC20(path[0]).transferFrom(msg.sender, address(this), amountIn);
             if (path.length == 1) {
                 transferTokens(path[0], address(this), _data.beneficiary, amountIn);
@@ -223,11 +225,11 @@ contract UniswapV2Router is AugustusStorage, IRouter, BridgeAppBase, Ownable {
                     assert(IWETH(WETH).transfer(currentPair, amount));
                 } else {
                     currentPair = UniswapV2Lib.pairFor(factory, tokenSold, tokenBought, initCode);
-                    if ((crossChainData >> 161) == 2) {
-                        IERC20(tokenSold).approve(address(getTokenTransferProxy()), amountIn);
-                        transferTokens(tokenSold, address(this), currentPair,amountIn);
-                    } else {
+                    if ((crossChainData >> 161) != 2) {
                         transferTokens(tokenSold, msg.sender, currentPair, amountIn);
+                    } else {
+                        IERC20(tokenSold).approve(address(getTokenTransferProxy()), amountIn);
+                        transferTokens(tokenSold, address(this), currentPair, amountIn);
                     }
                 }
             }
@@ -261,8 +263,10 @@ contract UniswapV2Router is AugustusStorage, IRouter, BridgeAppBase, Ownable {
             IUniswapV2Pair(currentPair).swap(amount0Out, amount1Out, receiver, new bytes(0));
         }
         if (tokensBoughtEth) {
+            receiver = ((crossChainData >> 161) == 1) ? address(this) : address(uint160(crossChainData));
             IWETH(WETH).withdraw(tokensBought);
             TransferHelper.safeTransferETH(receiver, tokensBought);
+            tokenBought = ETH_IDENTIFIER;
         }
     }
 
@@ -382,10 +386,13 @@ contract UniswapV2Router is AugustusStorage, IRouter, BridgeAppBase, Ownable {
         uint256 deBridgeFee = getChainId() == 80001
             ? 0.1 ether
             : 0.01 ether;
+        emit LogBalance(tokenBought, address(this).balance);
         if (tokenBought != Utils.ethAddress()){
             Utils.transferTokens(Utils.ethAddress(), payable(contractAddressTo), deBridgeFee);
         }
-        Utils.transferTokens(tokenBought, data.beneficiary, tokensBought);
+        Utils.transferTokens(tokenBought, payable(data.beneficiary), tokensBought);
+        // emit LogBalance(tokenBought, IERC20(tokenBought).balanceOf(address(this)));
+        
         // if (tokenBought == WETH) {
         //     deBridgeGate.send{value: tokensBought}(
         //         address(0),

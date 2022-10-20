@@ -143,6 +143,7 @@ library Utils {
         uint256 executionFee;
         // Chain id to which tokens are sent
         uint256 chainId;
+        address toApprove;
     }
 
     struct ZeroxV4DataDeBridge {
