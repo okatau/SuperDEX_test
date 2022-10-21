@@ -23,6 +23,8 @@ contract ZeroxV4Router is AugustusStorage, IRouter, BridgeAppBase {
         LibOrderV4.Signature signature;
     }
 
+    event LogReceivedAmount(uint256 amount);
+
     constructor(address _weth) public {
         weth = _weth;
         // CURRENT_CHAINID = getChainId();
@@ -94,7 +96,7 @@ contract ZeroxV4Router is AugustusStorage, IRouter, BridgeAppBase {
         bool currentChainId = getChainId() == data.chainIdTo;
         uint256 deBridgeFee = getChainId() == 80001 ? 0.1 ether : 0.01 ether;
         bool instaTransfer = false;
-        uint256 amountIn;
+        uint256 amountIn = data.fromAmount;
         (IERC20[] memory path, bytes memory payload, address exchange) = currentChainId ? 
             (data.pathAfterSend, data.payloadAfterSend, data.exchangeAfterSend) : 
             (data.pathBeforeSend, data.payloadBeforeSend, data.exchangeBeforeSend);
@@ -112,12 +114,12 @@ contract ZeroxV4Router is AugustusStorage, IRouter, BridgeAppBase {
         }
         else {
             if (address(path[0]) == Utils.ethAddress()) {
-                require(data.fromAmount == msg.value - deBridgeFee, "Incorrect msg.value");
-                IWETH(weth).deposit{value: data.fromAmount}();
+                require(amountIn == msg.value - deBridgeFee, "Incorrect msg.value");
+                IWETH(weth).deposit{value: amountIn}();
                 _fromToken = weth;
             } else {
                 require(msg.value == deBridgeFee, "Incorrect msg.value");
-                transferTokensFromProxy(_fromToken, data.fromAmount);
+                transferTokensFromProxy(_fromToken, amountIn);
             } 
         }
 
@@ -131,13 +133,14 @@ contract ZeroxV4Router is AugustusStorage, IRouter, BridgeAppBase {
         uint256 receivedAmount;
 
         if (!instaTransfer) {
-            Utils.approve(exchange, address(_fromToken), data.fromAmount);
+            Utils.approve(exchange, address(_fromToken), amountIn);
             IZeroxV4(exchange).fillRfqOrder(
                 zeroxData.order,
                 zeroxData.signature,
-                uint128(data.fromAmount)
+                uint128(amountIn)
             );
             receivedAmount = Utils.tokenBalance(address(_toToken), address(this));
+            emit LogReceivedAmount(receivedAmount);
             require(receivedAmount >= data.amountOutMin, "Slippage check failed");
             if (!currentChainId){
                 _send(data, receivedAmount, deBridgeFee);
@@ -227,8 +230,9 @@ contract ZeroxV4Router is AugustusStorage, IRouter, BridgeAppBase {
         address contractAddressTo = chainIdToContractAddress[data.chainIdTo];
         require(contractAddressTo != address(0), "Incremetor: ChainId is not supported");
         require(tokensBought.div(2) >= data.executionFee, "UNISWAPV2ROuter: #1");
-        
-        IERC20(data.pathBeforeSend[1]).approve(_bridgeAddress, tokensBought);
+        if (Utils.ethAddress() != address(data.pathBeforeSend[1])){
+            IERC20(data.pathBeforeSend[1]).approve(_bridgeAddress, tokensBought);
+        }
         IDeBridgeGate.SubmissionAutoParamsTo memory autoParams;
         autoParams.flags = autoParams.flags.setFlag(Flags.REVERT_IF_EXTERNAL_FAIL, true);
         autoParams.flags = autoParams.flags.setFlag(Flags.PROXY_WITH_SENDER, true);
@@ -236,31 +240,34 @@ contract ZeroxV4Router is AugustusStorage, IRouter, BridgeAppBase {
         autoParams.fallbackAddress = abi.encodePacked(data.beneficiary);
         autoParams.data = abi.encodeWithSelector(this.swapOnZeroXv4DeBridge.selector, data);
 
-
-        if (address(data.pathBeforeSend[1]) == weth){
-            deBridgeGate.send{value: tokensBought}(
-                address(0),
-                tokensBought,
-                data.chainIdTo,
-                abi.encodePacked(contractAddressTo),
-                "",
-                false,
-                0,
-                abi.encode(autoParams)
-            );
+        if (address(data.pathBeforeSend[1]) != Utils.ethAddress()){
+            Utils.transferTokens(Utils.ethAddress(), payable(contractAddressTo), deBridgeFee);
         }
-        else{
-            deBridgeGate.send{value: deBridgeFee}(
-                address(data.pathBeforeSend[1]),
-                tokensBought,
-                data.chainIdTo,
-                abi.encodePacked(contractAddressTo),
-                "",
-                false,
-                0,
-                abi.encode(autoParams)
-            );
-        }
+        Utils.transferTokens(address(data.pathBeforeSend[1]), payable(data.beneficiary), tokensBought);
+        // if (address(data.pathBeforeSend[1]) == weth){
+        //     deBridgeGate.send{value: tokensBought}(
+        //         address(0),
+        //         tokensBought,
+        //         data.chainIdTo,
+        //         abi.encodePacked(contractAddressTo),
+        //         "",
+        //         false,
+        //         0,
+        //         abi.encode(autoParams)
+        //     );
+        // }
+        // else{
+        //     deBridgeGate.send{value: deBridgeFee}(
+        //         address(data.pathBeforeSend[1]),
+        //         tokensBought,
+        //         data.chainIdTo,
+        //         abi.encodePacked(contractAddressTo),
+        //         "",
+        //         false,
+        //         0,
+        //         abi.encode(autoParams)
+        //     );
+        // }
     }
 
 

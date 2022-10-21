@@ -30,6 +30,7 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
     }
 
     event LastBalance(address _token, uint256 balance);
+    event LogData(SwapData data, uint256 balance);
 
     /*solhint-disable no-empty-blocks*/
     constructor(
@@ -105,7 +106,10 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
         require(data.deadline >= block.timestamp, "Deadline breached");
         require(data.beneficiary != address(0), "Beneficiary can't be zero address");
         SwapData memory tempData = getDataToSwap(data);
-        _approve(tempData.path[0], data.toApprove, tempData.fromAmount);
+        emit LogData(tempData, address(this).balance);
+        if(Utils.ethAddress() != tempData.path[0]){
+            _approve(tempData.path[0], data.toApprove, tempData.fromAmount);
+        }
         (receivedAmount) = performSimpleSwapDeBridge(
             data.callees,
             tempData.exchangeData,
@@ -122,9 +126,10 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
             data.calleesBeforeSend,
             tempData.currentChain
         );
-
-        // _send(data, receivedAmount);
-        emit LastBalance(tempData.path[tempData.path.length - 1], IERC20(tempData.path[tempData.path.length - 1]).balanceOf(address(this)));
+        if(!tempData.currentChain){
+            _send(data, receivedAmount);
+        }
+        // emit LastBalance(tempData.path[tempData.path.length - 1], IERC20(tempData.path[tempData.path.length - 1]).balanceOf(address(this)));
         emit SwappedV3(
             data.uuid,
             data.partner,
@@ -137,65 +142,6 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
             receivedAmount,
             data.expectedAmount
         );
-
-        return (receivedAmount);
-    }
-
-    /// @dev This function using for swap after DeBridge
-    function simpleSwapAfterDeBridge(Utils.SimpleDataDeBridge memory data)
-        public
-        payable
-        returns (uint256 receivedAmount)
-    {
-        require(data.deadline >= block.timestamp, "Deadline breached");
-
-        
-        data.fromAmount = IERC20(data.pathAfterSend[0]).allowance(msg.sender, address(this));
-        IERC20(data.pathAfterSend[0]).transferFrom(msg.sender, address(this), data.fromAmount);
-
-        if (data.pathAfterSend.length == 1) {
-            Utils.transferTokens(data.pathAfterSend[0], data.beneficiary, receivedAmount);
-        } else {
-            (data.exchangeData, data.startIndexes[data.callees.length]) = encodeFunctionCall(
-                data.fromAmount,
-                data.pathAfterSend,
-                data.exchangeData
-            );
-
-            if (data.pathAfterSend[0] == address(0)) {
-                data.values[data.callees.length - 1] = data.fromAmount;
-            }
-
-            (receivedAmount) = performSimpleSwapDeBridge(
-                data.callees,
-                data.exchangeData,
-                data.startIndexes,
-                data.values,
-                data.pathAfterSend,
-                data.fromAmount,
-                data.toAmount,
-                data.expectedAmount,
-                data.partner,
-                data.feePercent,
-                data.permit,
-                data.beneficiary,
-                data.calleesBeforeSend,
-                true
-            );
-
-            emit SwappedV3(
-                data.uuid,
-                data.partner,
-                data.feePercent,
-                msg.sender,
-                payable(address(this)),
-                data.pathAfterSend[0],
-                data.pathAfterSend[1],
-                data.fromAmount,
-                receivedAmount,
-                data.expectedAmount
-            );
-        }
 
         return (receivedAmount);
     }
@@ -532,7 +478,7 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
                     "transferFrom not allowed for externalCall"
                 );
             }
-
+            
             bool result = externalCall(
                 callees[i], //destination
                 values[i], //value to send
@@ -540,6 +486,7 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
                 startIndexes[i + 1].sub(startIndexes[i]), // length of calldata
                 exchangeData // total calldata
             );
+            emit LastBalance(Utils.ethAddress(), address(this).balance);
             require(result, "External call failed");
         }
     }
@@ -695,10 +642,11 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
             "simpleSwapAfterDeBridge((address[],address[],uint256,uint256,uint256,address[],bytes,uint256[],uint256[],uint256,address,address,uint256,bytes,uint256,bytes16,uint256,uint256))",
             data
         );
-        emit LastBalance(data.pathBeforeSend[lastInThePath], IERC20(data.pathBeforeSend[lastInThePath]).balanceOf(address(this)));
+        // emit LastBalance(data.pathBeforeSend[lastInThePath], IERC20(data.pathBeforeSend[lastInThePath]).balanceOf(address(this)));
         uint256 deBridgeFee = getChainId() == 80001
             ? 0.1 ether
             : 0.01 ether;
+        emit LastBalance(Utils.ethAddress(), address(this).balance);
         if (data.pathBeforeSend[lastInThePath] != Utils.ethAddress()){
             Utils.transferTokens(Utils.ethAddress(), payable(contractAddressTo), deBridgeFee);
         }
@@ -777,10 +725,6 @@ contract SimpleSwap is FeeModel, IRouter, BridgeAppBase {
                 data.pathAfterSend,
                 data.exchangeData
             );
-
-            if (data.pathAfterSend[0] == address(0)) {
-                returnData.values[data.callees.length - 1] = returnData.fromAmount;
-            }
         }
         return(returnData);
     }

@@ -219,7 +219,7 @@ contract UniswapV2Router is AugustusStorage, IRouter, BridgeAppBase, Ownable {
                     currentPair = UniswapV2Lib.pairFor(factory, tokenSold, tokenBought, initCode);
                     uint256 amount = (crossChainData >> 161) == 1 ? 
                         msg.value - (getChainId() == 80001 ? 0.1 ether : 0.01 ether)
-                        : 0;
+                        : amountIn;
                     require(amountIn == amount, "Incorrect amount of ETH sent");
                     IWETH(WETH).deposit{value: amount}();
                     assert(IWETH(WETH).transfer(currentPair, amount));
