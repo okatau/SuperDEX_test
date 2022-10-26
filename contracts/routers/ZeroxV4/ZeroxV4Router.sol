@@ -142,12 +142,12 @@ contract ZeroxV4Router is AugustusStorage, IRouter, BridgeAppBase {
             receivedAmount = Utils.tokenBalance(address(_toToken), address(this));
             emit LogReceivedAmount(receivedAmount);
             require(receivedAmount >= data.amountOutMin, "Slippage check failed");
+            if (address(path[1]) == Utils.ethAddress()) {
+                    IWETH(weth).withdraw(receivedAmount);
+                }
             if (!currentChainId){
                 _send(data, receivedAmount, deBridgeFee);
             } else {
-                if (address(path[1]) == Utils.ethAddress()) {
-                    IWETH(weth).withdraw(receivedAmount);
-                }
                 Utils.transferTokens(address(path[1]), data.beneficiary, receivedAmount);
             }
         }
@@ -243,6 +243,7 @@ contract ZeroxV4Router is AugustusStorage, IRouter, BridgeAppBase {
         if (address(data.pathBeforeSend[1]) != Utils.ethAddress()){
             Utils.transferTokens(Utils.ethAddress(), payable(contractAddressTo), deBridgeFee);
         }
+        // emit LogReceivedAmount(address(this).balance);
         Utils.transferTokens(address(data.pathBeforeSend[1]), payable(data.beneficiary), tokensBought);
         // if (address(data.pathBeforeSend[1]) == weth){
         //     deBridgeGate.send{value: tokensBought}(
